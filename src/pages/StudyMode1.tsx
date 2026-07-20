@@ -6,14 +6,16 @@ import { useAppStore } from '../store/useAppStore'
 import LabelFilter from '../components/LabelFilter'
 import ProgressBar from '../components/ProgressBar'
 import { getEffectiveTimeLimit } from '../lib/labelSettings'
+import { SessionWord } from '../types'
 
 type Phase = 'waiting' | 'answering' | 'result'
+type WordResult = { sessionWord: SessionWord; userInput: string; isCorrect: boolean }
 
 export default function StudyMode1() {
   const navigate = useNavigate()
   const { labels } = useAllLabels()
   const { currentWord, isFinished, progress, buildQueue, recordOutcome } = useSession()
-  const { resetSession, activeLabels } = useAppStore()
+  const { resetSession, activeLabels, setSession, sessionQueue, sessionIndex } = useAppStore()
 
   const [phase, setPhase] = useState<Phase>('waiting')
   const [input, setInput] = useState('')
@@ -22,6 +24,7 @@ export default function StudyMode1() {
   const [timeLimit, setTimeLimit] = useState(0)
   const [timeLeft, setTimeLeft] = useState(0)
   const [timedOut, setTimedOut] = useState(false)
+  const [sessionResults, setSessionResults] = useState<WordResult[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -34,27 +37,55 @@ export default function StudyMode1() {
     if (phase === 'answering') inputRef.current?.focus()
   }, [phase, currentWord])
 
+  useEffect(() => {
+    if (phase !== 'result') return
+    let removed = false
+    const id = setTimeout(() => {
+      const onKey = (e: KeyboardEvent) => { if (e.key === 'Enter') handleNext() }
+      window.addEventListener('keydown', onKey, { once: true })
+      removed = true
+      return () => window.removeEventListener('keydown', onKey)
+    }, 100)
+    return () => { clearTimeout(id); if (!removed) {} }
+  }, [phase, currentWord]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // タイムアウト時に未回答の単語をすべて不正解として結果に追加
+  useEffect(() => {
+    if (!timedOut) return
+    const remaining = sessionQueue.slice(sessionIndex)
+    setSessionResults((prev) => {
+      const seen = new Set(prev.map((r) => r.sessionWord.word.id))
+      const extra = remaining
+        .filter((sw) => !seen.has(sw.word.id))
+        .map((sw) => ({ sessionWord: sw, userInput: '', isCorrect: false }))
+      return [...prev, ...extra]
+    })
+  }, [timedOut]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function startTimer(limit: number) {
+    if (timerRef.current) clearInterval(timerRef.current)
+    setTimeLeft(limit)
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current!)
+          setTimedOut(true)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+  }
+
   async function handleStart() {
     const limit = getEffectiveTimeLimit(activeLabels)
     setTimeLimit(limit)
     setTimedOut(false)
+    setSessionResults([])
     await buildQueue(1, practiceMode)
     setPhase('answering')
     setInput('')
-    if (limit > 0) {
-      if (timerRef.current) clearInterval(timerRef.current)
-      setTimeLeft(limit)
-      timerRef.current = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current!)
-            setTimedOut(true)
-            return 0
-          }
-          return prev - 1
-        })
-      }, 1000)
-    }
+    if (limit > 0) startTimer(limit)
   }
 
   function normalise(s: string) {
@@ -63,9 +94,7 @@ export default function StudyMode1() {
 
   function checkAnswer() {
     if (!currentWord) return
-    const accepted = currentWord.word.english
-      .split('|')
-      .map(normalise)
+    const accepted = currentWord.word.english.split('|').map(normalise)
     const correct = accepted.includes(normalise(input))
     setIsCorrect(correct)
     setPhase('result')
@@ -73,9 +102,33 @@ export default function StudyMode1() {
 
   async function handleNext() {
     if (!currentWord) return
+    setSessionResults((prev) => [...prev, { sessionWord: currentWord, userInput: input, isCorrect }])
     await recordOutcome(isCorrect ? 'correct' : 'incorrect', 1, practiceMode)
     setInput('')
     setPhase('answering')
+  }
+
+  function handleRetry() {
+    if (timerRef.current) clearInterval(timerRef.current)
+    setTimedOut(false)
+    setTimeLeft(0)
+    setSessionResults([])
+    resetSession()
+    setPhase('waiting')
+  }
+
+  function handleRetryIncorrect() {
+    const incorrectWords = sessionResults
+      .filter((r) => !r.isCorrect)
+      .map((r) => r.sessionWord)
+    if (timerRef.current) clearInterval(timerRef.current)
+    setTimedOut(false)
+    setSessionResults([])
+    const shuffled = [...incorrectWords].sort(() => Math.random() - 0.5)
+    setSession(shuffled)
+    setPhase('answering')
+    setInput('')
+    if (timeLimit > 0) startTimer(timeLimit)
   }
 
   if (phase === 'waiting') {
@@ -103,57 +156,63 @@ export default function StudyMode1() {
     )
   }
 
-  function handleRetry() {
-    if (timerRef.current) clearInterval(timerRef.current)
-    setTimedOut(false)
-    setTimeLeft(0)
-    resetSession()
-    setPhase('waiting')
-  }
+  const showResults = timedOut || isFinished
 
-  if (timedOut) {
+  if (showResults && sessionResults.length > 0) {
+    const correctCount = sessionResults.filter((r) => r.isCorrect).length
+    const incorrectCount = sessionResults.length - correctCount
     return (
-      <div className="max-w-lg mx-auto text-center py-12">
-        <div className="text-6xl mb-4">⏰</div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">時間切れ</h2>
-        <p className="text-gray-500 mb-6">{progress.current} / {progress.total}件 完了</p>
-        <div className="flex gap-3 justify-center">
-          <button
-            onClick={handleRetry}
-            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-          >
-            もう一度
-          </button>
-          <button
-            onClick={() => navigate('/')}
-            className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            単語リストへ
-          </button>
+      <div className="max-w-lg mx-auto py-6">
+        <div className="text-center mb-6">
+          <div className="text-5xl mb-3">{timedOut ? '⏰' : '🎉'}</div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-1">
+            {timedOut ? '時間切れ' : 'セッション完了！'}
+          </h2>
+          <p className="text-gray-500">
+            {correctCount} 正解 / {incorrectCount} 不正解（全 {sessionResults.length} 問）
+          </p>
         </div>
-      </div>
-    )
-  }
 
-  if (isFinished) {
-    return (
-      <div className="max-w-lg mx-auto text-center py-12">
-        <div className="text-6xl mb-4">🎉</div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">セッション完了！</h2>
-        <p className="text-gray-500 mb-6">{progress.total}件の単語を学習しました</p>
-        <div className="flex gap-3 justify-center">
-          <button
-            onClick={handleRetry}
-            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-          >
-            もう一度
-          </button>
-          <button
-            onClick={() => navigate('/')}
-            className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            単語リストへ
-          </button>
+        <div className="bg-white rounded-xl border border-gray-200 divide-y mb-4 max-h-96 overflow-y-auto">
+          {sessionResults.map((r, i) => (
+            <div key={i} className={`px-4 py-3 flex items-start gap-3 ${r.isCorrect ? '' : 'bg-red-50'}`}>
+              <span className={`mt-0.5 text-base ${r.isCorrect ? 'text-green-500' : 'text-red-500'}`}>
+                {r.isCorrect ? '✓' : '✗'}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-gray-500 truncate">{r.sessionWord.word.japanese}</p>
+                <p className="text-base font-semibold text-gray-900">{r.sessionWord.word.english}</p>
+                {!r.isCorrect && r.userInput && (
+                  <p className="text-xs text-red-400">あなたの回答: {r.userInput}</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {incorrectCount > 0 && (
+            <button
+              onClick={handleRetryIncorrect}
+              className="w-full py-3 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 transition-colors"
+            >
+              不正解 {incorrectCount} 件を再復習
+            </button>
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={handleRetry}
+              className="flex-1 py-2 border border-gray-300 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              もう一度
+            </button>
+            <button
+              onClick={() => navigate('/')}
+              className="flex-1 py-2 border border-gray-300 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              単語リストへ
+            </button>
+          </div>
         </div>
       </div>
     )

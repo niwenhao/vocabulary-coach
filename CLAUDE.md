@@ -50,11 +50,21 @@ Three tables: `words`, `review_records` (one per word, holds SM-2 state), `study
 
 Study pages call `resetSession()` on mount so stale queues don't carry over between sessions.
 
+### Typing mode timer (`src/pages/StudyMode1.tsx`)
+
+Per-session countdown driven by `setInterval` in `startTimer()`. State: `timeLimit` (total seconds, 0 = no limit), `timeLeft` (countdown). Elapsed time is derived as `timeLimit - timeLeft` — not stored separately.
+
+`formatTime(secs)` renders as `X分XX秒` (≥60 s) or `XX秒` (<60 s). Both elapsed and remaining are shown during answering and on the results screen. Timer stops on `isFinished` (all words answered) via a `useEffect`; on timeout `timedOut` flips to true and remaining words are recorded as incorrect.
+
 ### SM-2 algorithm (`src/lib/sm2.ts`)
 
 Pure function — no side effects. Quality mapping: `correct → 5`, `remembered → 4`, `incorrect → 2`, `forgot → 1`. A new word's `ReviewRecord` is initialised with `dueDate = Date.now()` so it appears immediately in `getDueWords`.
 
-### CSV format
+### Import / Export formats
+
+Import/export logic lives in `src/lib/csv.ts` (despite the name, it handles both CSV and Excel).
+
+**CSV** (`importFromCSV` / `exportToCSV`) — uses `papaparse`:
 
 | column | separator |
 |--------|-----------|
@@ -62,6 +72,10 @@ Pure function — no side effects. Quality mapping: `correct → 5`, `remembered
 | `ipa` | — |
 | `japanese` | quoted if it contains commas |
 | `labels` | `;` within the field (not `,`) |
+
+**Excel** (`importFromExcel` / `exportToExcel`) — uses `xlsx` (SheetJS). First sheet is read/written. Column headers are identical to CSV: `english`, `ipa`, `japanese`, `labels` (labels still `;`-separated within the cell).
+
+Both import functions call `upsertWord()` and are idempotent.
 
 Alternative spellings for Mode 1 answer-checking are stored as `"color\|colour"` in the `english` field and split on `|` at comparison time.
 

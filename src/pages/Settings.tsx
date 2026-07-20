@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { exportToCSV } from '../lib/csv'
+import { exportToCSV, exportToExcel } from '../lib/csv'
 import { clearAllData, downloadDB, getAllLabels } from '../db/db'
 import {
   getDefaultTimeLimit,
@@ -83,13 +83,19 @@ export default function Settings() {
       <section className="bg-white rounded-xl border border-gray-200 divide-y">
         <div className="px-5 py-4">
           <h2 className="text-sm font-semibold text-gray-700 mb-1">バックアップ</h2>
-          <p className="text-xs text-gray-500 mb-3">すべての単語をCSVファイルにエクスポートします</p>
+          <p className="text-xs text-gray-500 mb-3">すべての単語をファイルにエクスポートします</p>
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => exportToCSV()}
               className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 transition-colors"
             >
               CSVエクスポート
+            </button>
+            <button
+              onClick={() => exportToExcel()}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors"
+            >
+              Excelエクスポート
             </button>
             <button
               onClick={() => downloadDB()}

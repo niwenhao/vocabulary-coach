@@ -3,7 +3,7 @@ import { useAppStore } from '../store/useAppStore'
 import { useWords, useAllLabels } from '../hooks/useWords'
 import LabelFilter from '../components/LabelFilter'
 import WordTable from '../components/WordTable'
-import { importFromCSV, exportToCSV } from '../lib/csv'
+import { importFromCSV, exportToCSV, importFromExcel, exportToExcel } from '../lib/csv'
 import { resetReviewsByWordIds } from '../db/db'
 
 export default function Home() {
@@ -11,6 +11,7 @@ export default function Home() {
   const { words, loading, refresh } = useWords(activeLabels)
   const { labels, refresh: refreshLabels } = useAllLabels()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const xlsxInputRef = useRef<HTMLInputElement>(null)
   const [filterText, setFilterText] = useState('')
 
   const filteredWords = words.filter(w =>
@@ -28,6 +29,16 @@ export default function Home() {
     const file = e.target.files?.[0]
     if (!file) return
     const result = await importFromCSV(file)
+    alert(`インポート完了: 追加 ${result.inserted}件、更新 ${result.updated}件${result.errors.length > 0 ? `\nエラー: ${result.errors.join('\n')}` : ''}`)
+    e.target.value = ''
+    await refresh()
+    await refreshLabels()
+  }
+
+  async function handleImportExcel(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const result = await importFromExcel(file)
     alert(`インポート完了: 追加 ${result.inserted}件、更新 ${result.updated}件${result.errors.length > 0 ? `\nエラー: ${result.errors.join('\n')}` : ''}`)
     e.target.value = ''
     await refresh()
@@ -57,12 +68,31 @@ export default function Home() {
           >
             CSVエクスポート
           </button>
+          <button
+            onClick={() => xlsxInputRef.current?.click()}
+            className="px-3 py-2 text-sm border border-green-300 text-green-700 rounded-lg hover:bg-green-50 transition-colors"
+          >
+            Excelインポート
+          </button>
+          <button
+            onClick={() => exportToExcel()}
+            className="px-3 py-2 text-sm border border-green-300 text-green-700 rounded-lg hover:bg-green-50 transition-colors"
+          >
+            Excelエクスポート
+          </button>
           <input
             ref={fileInputRef}
             type="file"
             accept=".csv"
             className="hidden"
             onChange={handleImport}
+          />
+          <input
+            ref={xlsxInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={handleImportExcel}
           />
         </div>
       </div>

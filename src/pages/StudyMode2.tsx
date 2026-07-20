@@ -26,7 +26,7 @@ export default function StudyMode2() {
   }, [currentWord])
 
   async function handleStart() {
-    await buildQueue()
+    await buildQueue(2)
     setStarted(true)
   }
 
@@ -43,7 +43,7 @@ export default function StudyMode2() {
   if (!started) {
     return (
       <div className="max-w-lg mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">モード2: 単語確認</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">フラッシュカード</h1>
         <p className="text-gray-500 mb-6">英語→IPA→日本語の順でタップして表示。覚えているか確認します。</p>
         <LabelFilter labels={labels} />
         <button

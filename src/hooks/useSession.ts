@@ -19,8 +19,8 @@ export function useSession() {
   const currentWord: SessionWord | null = sessionQueue[sessionIndex] ?? null
   const isFinished = sessionIndex >= sessionQueue.length && sessionQueue.length > 0
 
-  const buildQueue = useCallback(async () => {
-    const due = await getDueWords(activeLabels)
+  const buildQueue = useCallback(async (mode: 1 | 2) => {
+    const due = await getDueWords(activeLabels, mode)
     setSession(shuffle(due))
   }, [activeLabels, setSession])
 

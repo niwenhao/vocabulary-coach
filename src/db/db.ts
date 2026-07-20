@@ -21,11 +21,13 @@ CREATE TABLE IF NOT EXISTS words (
 CREATE TABLE IF NOT EXISTS review_records (
   id               INTEGER PRIMARY KEY AUTOINCREMENT,
   word_id          INTEGER NOT NULL,
+  mode             INTEGER NOT NULL DEFAULT 1,
   interval_days    INTEGER NOT NULL DEFAULT 0,
   repetitions      INTEGER NOT NULL DEFAULT 0,
   ease_factor      REAL    NOT NULL DEFAULT 2.5,
   due_date         INTEGER NOT NULL,
   last_reviewed_at INTEGER NOT NULL,
+  UNIQUE (word_id, mode),
   FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
 );
 
@@ -43,6 +45,19 @@ CREATE INDEX IF NOT EXISTS idx_review_word ON review_records(word_id);
 CREATE INDEX IF NOT EXISTS idx_study_word  ON study_events(word_id);
 `
 
+const DB_VERSION = 2
+
+const UPGRADES = [
+  {
+    toVersion: 2,
+    statements: [
+      `ALTER TABLE review_records ADD COLUMN mode INTEGER NOT NULL DEFAULT 1;`,
+      `INSERT INTO review_records (word_id, mode, interval_days, repetitions, ease_factor, due_date, last_reviewed_at)
+       SELECT word_id, 2, 0, 0, 2.5, due_date, last_reviewed_at FROM review_records WHERE mode = 1;`,
+    ],
+  },
+]
+
 export async function initDB(): Promise<void> {
   const platform = Capacitor.getPlatform()
 
@@ -50,12 +65,14 @@ export async function initDB(): Promise<void> {
     await sqlite.initWebStore()
   }
 
+  await sqlite.addUpgradeStatement('vocabdb', UPGRADES)
+
   const ret = await sqlite.checkConnectionsConsistency()
   const isConn = (await sqlite.isConnection('vocabdb', false)).result
   if (ret.result && isConn) {
     db = await sqlite.retrieveConnection('vocabdb', false)
   } else {
-    db = await sqlite.createConnection('vocabdb', false, 'no-encryption', 1, false)
+    db = await sqlite.createConnection('vocabdb', false, 'no-encryption', DB_VERSION, false)
   }
 
   await db.open()
@@ -153,6 +170,7 @@ function rowToReview(row: Record<string, unknown>): ReviewRecord {
   return {
     id: row['id'] as number,
     wordId: row['word_id'] as number,
+    mode: (row['mode'] as 1 | 2) ?? 1,
     interval: row['interval_days'] as number,
     repetitions: row['repetitions'] as number,
     easeFactor: row['ease_factor'] as number,
@@ -170,12 +188,12 @@ export async function getReviewByWordId(wordId: number): Promise<ReviewRecord | 
   return rows.length > 0 ? rowToReview(rows[0]) : null
 }
 
-export async function insertReview(wordId: number): Promise<void> {
+export async function insertReview(wordId: number, mode: 1 | 2): Promise<void> {
   const now = Date.now()
   await getDB().run(
-    `INSERT INTO review_records (word_id, interval_days, repetitions, ease_factor, due_date, last_reviewed_at)
-     VALUES (?, 0, 0, 2.5, ?, ?)`,
-    [wordId, now, now]
+    `INSERT INTO review_records (word_id, mode, interval_days, repetitions, ease_factor, due_date, last_reviewed_at)
+     VALUES (?, ?, 0, 0, 2.5, ?, ?)`,
+    [wordId, mode, now, now]
   )
   await saveDB()
 }
@@ -193,21 +211,23 @@ export async function updateReview(
   await saveDB()
 }
 
-export async function resetReviewsByWordIds(wordIds: number[]): Promise<void> {
+export async function resetReviewsByWordIds(wordIds: number[], mode?: 1 | 2): Promise<void> {
   if (wordIds.length === 0) return
   const now = Date.now()
   const placeholders = wordIds.map(() => '?').join(',')
+  const modeClause = mode != null ? ` AND mode = ?` : ''
+  const modeParam = mode != null ? [mode] : []
   await getDB().run(
     `UPDATE review_records
      SET interval_days = 0, repetitions = 0, ease_factor = 2.5,
          due_date = ?, last_reviewed_at = ?
-     WHERE word_id IN (${placeholders})`,
-    [now, now, ...wordIds]
+     WHERE word_id IN (${placeholders})${modeClause}`,
+    [now, now, ...wordIds, ...modeParam]
   )
   await saveDB()
 }
 
-export async function getDueWords(labels: string[]): Promise<
+export async function getDueWords(labels: string[], mode: 1 | 2): Promise<
   Array<{ word: Word; review: ReviewRecord }>
 > {
   const now = Date.now()
@@ -215,21 +235,21 @@ export async function getDueWords(labels: string[]): Promise<
   let params: (string | number)[]
 
   if (labels.length === 0) {
-    sql = `SELECT w.*, r.id as r_id, r.word_id, r.interval_days, r.repetitions, r.ease_factor, r.due_date, r.last_reviewed_at
+    sql = `SELECT w.*, r.id as r_id, r.word_id, r.mode as r_mode, r.interval_days, r.repetitions, r.ease_factor, r.due_date, r.last_reviewed_at
            FROM words w
            JOIN review_records r ON r.word_id = w.id
-           WHERE r.due_date <= ?
+           WHERE r.due_date <= ? AND r.mode = ?
            ORDER BY r.due_date ASC`
-    params = [now]
+    params = [now, mode]
   } else {
     const placeholders = labels.map(() => '?').join(',')
-    sql = `SELECT DISTINCT w.*, r.id as r_id, r.word_id, r.interval_days, r.repetitions, r.ease_factor, r.due_date, r.last_reviewed_at
+    sql = `SELECT DISTINCT w.*, r.id as r_id, r.word_id, r.mode as r_mode, r.interval_days, r.repetitions, r.ease_factor, r.due_date, r.last_reviewed_at
            FROM words w
            JOIN review_records r ON r.word_id = w.id
            JOIN json_each(w.labels) je ON je.value IN (${placeholders})
-           WHERE r.due_date <= ?
+           WHERE r.due_date <= ? AND r.mode = ?
            ORDER BY r.due_date ASC`
-    params = [...labels, now]
+    params = [...labels, now, mode]
   }
 
   const res = await getDB().query(sql, params)
@@ -238,6 +258,7 @@ export async function getDueWords(labels: string[]): Promise<
     review: {
       id: row['r_id'] as number,
       wordId: row['word_id'] as number,
+      mode: row['r_mode'] as 1 | 2,
       interval: row['interval_days'] as number,
       repetitions: row['repetitions'] as number,
       easeFactor: row['ease_factor'] as number,
@@ -292,7 +313,8 @@ export async function upsertWord(
     return { action: 'updated', id }
   } else {
     const id = await insertWord(data)
-    await insertReview(id)
+    await insertReview(id, 1)
+    await insertReview(id, 2)
     return { action: 'inserted', id }
   }
 }

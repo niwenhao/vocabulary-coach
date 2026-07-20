@@ -11,6 +11,7 @@ export interface Word {
 export interface ReviewRecord {
   id: number
   wordId: number
+  mode: 1 | 2
   interval: number
   repetitions: number
   easeFactor: number

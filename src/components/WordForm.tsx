@@ -41,7 +41,8 @@ export default function WordForm({ word, onClose, onSaved }: Props) {
         await updateWord(word.id, { english: english.trim(), ipa: ipa.trim(), japanese: japanese.trim(), labels })
       } else {
         const id = await insertWord({ english: english.trim(), ipa: ipa.trim(), japanese: japanese.trim(), labels })
-        await insertReview(id)
+        await insertReview(id, 1)
+        await insertReview(id, 2)
       }
       onSaved()
       onClose()

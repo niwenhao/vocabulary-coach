@@ -28,7 +28,7 @@ export default function StudyMode1() {
   }, [phase, currentWord])
 
   async function handleStart() {
-    await buildQueue()
+    await buildQueue(1)
     setPhase('answering')
     setInput('')
   }
@@ -57,7 +57,7 @@ export default function StudyMode1() {
   if (phase === 'waiting') {
     return (
       <div className="max-w-lg mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">モード1: 英単語入力</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">タイピング練習</h1>
         <p className="text-gray-500 mb-6">日本語の意味を見て、英語を入力します。</p>
         <LabelFilter labels={labels} />
         <button

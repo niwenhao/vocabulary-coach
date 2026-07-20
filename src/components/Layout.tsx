@@ -14,8 +14,8 @@ export default function Layout() {
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-2 flex-wrap">
           <span className="text-white font-bold text-lg mr-4">📚 Vocabular Coach</span>
           <NavLink to="/" end className={linkClass}>単語リスト</NavLink>
-          <NavLink to="/mode1" className={linkClass}>モード1</NavLink>
-          <NavLink to="/mode2" className={linkClass}>モード2</NavLink>
+          <NavLink to="/mode1" className={linkClass}>タイピング</NavLink>
+          <NavLink to="/mode2" className={linkClass}>フラッシュカード</NavLink>
           <NavLink to="/settings" className={linkClass}>設定</NavLink>
         </div>
       </nav>

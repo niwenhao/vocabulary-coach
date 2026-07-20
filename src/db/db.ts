@@ -67,6 +67,12 @@ function getDB(): SQLiteDBConnection {
   return db
 }
 
+async function saveDB(): Promise<void> {
+  if (Capacitor.getPlatform() === 'web') {
+    await sqlite.saveToStore('vocabdb')
+  }
+}
+
 // ── Word queries ──────────────────────────────────────────────────────────────
 
 function rowToWord(row: Record<string, unknown>): Word {
@@ -113,6 +119,7 @@ export async function insertWord(
      VALUES (?, ?, ?, ?, ?, ?)`,
     [data.english, data.ipa, data.japanese, JSON.stringify(data.labels), now, now]
   )
+  await saveDB()
   return res.changes?.lastId ?? 0
 }
 
@@ -125,10 +132,12 @@ export async function updateWord(
     `UPDATE words SET english=?, ipa=?, japanese=?, labels=?, updated_at=? WHERE id=?`,
     [data.english, data.ipa, data.japanese, JSON.stringify(data.labels), now, id]
   )
+  await saveDB()
 }
 
 export async function deleteWord(id: number): Promise<void> {
   await getDB().run('DELETE FROM words WHERE id = ?', [id])
+  await saveDB()
 }
 
 export async function getAllLabels(): Promise<string[]> {
@@ -168,6 +177,7 @@ export async function insertReview(wordId: number): Promise<void> {
      VALUES (?, 0, 0, 2.5, ?, ?)`,
     [wordId, now, now]
   )
+  await saveDB()
 }
 
 export async function updateReview(
@@ -180,6 +190,7 @@ export async function updateReview(
      WHERE id=?`,
     [data.interval, data.repetitions, data.easeFactor, data.dueDate, data.lastReviewedAt, id]
   )
+  await saveDB()
 }
 
 export async function getDueWords(labels: string[]): Promise<
@@ -233,6 +244,7 @@ export async function insertStudyEvent(
     `INSERT INTO study_events (word_id, mode, outcome, studied_at) VALUES (?, ?, ?, ?)`,
     [wordId, mode, outcome, Date.now()]
   )
+  await saveDB()
 }
 
 export async function getStudyHistory(wordId: number): Promise<StudyEvent[]> {
@@ -273,4 +285,12 @@ export async function upsertWord(
 
 export async function clearAllData(): Promise<void> {
   await getDB().execute('DELETE FROM study_events; DELETE FROM review_records; DELETE FROM words;')
+  await saveDB()
+}
+
+export async function downloadDB(): Promise<void> {
+  if (Capacitor.getPlatform() === 'web') {
+    await sqlite.saveToStore('vocabdb')
+    await sqlite.saveToLocalDisk('vocabdb')
+  }
 }

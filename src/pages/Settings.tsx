@@ -1,5 +1,5 @@
 import { exportToCSV } from '../lib/csv'
-import { clearAllData } from '../db/db'
+import { clearAllData, downloadDB } from '../db/db'
 
 export default function Settings() {
   async function handleClear() {
@@ -17,12 +17,20 @@ export default function Settings() {
         <div className="px-5 py-4">
           <h2 className="text-sm font-semibold text-gray-700 mb-1">バックアップ</h2>
           <p className="text-xs text-gray-500 mb-3">すべての単語をCSVファイルにエクスポートします</p>
-          <button
-            onClick={() => exportToCSV()}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 transition-colors"
-          >
-            CSVエクスポート
-          </button>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => exportToCSV()}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 transition-colors"
+            >
+              CSVエクスポート
+            </button>
+            <button
+              onClick={() => downloadDB()}
+              className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm hover:bg-gray-800 transition-colors"
+            >
+              DBダウンロード (.db)
+            </button>
+          </div>
         </div>
 
         <div className="px-5 py-4">

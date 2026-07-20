@@ -16,6 +16,7 @@ export default function StudyMode2() {
 
   const [started, setStarted] = useState(false)
   const [cardState, setCardState] = useState<CardState>('english')
+  const [practiceMode, setPracticeMode] = useState(false)
 
   useEffect(() => {
     resetSession()
@@ -26,13 +27,13 @@ export default function StudyMode2() {
   }, [currentWord])
 
   async function handleStart() {
-    await buildQueue(2)
+    await buildQueue(2, practiceMode)
     setStarted(true)
   }
 
   async function handleMark(remembered: boolean) {
     setCardState('marked')
-    await recordOutcome(remembered ? 'remembered' : 'forgot', 2)
+    await recordOutcome(remembered ? 'remembered' : 'forgot', 2, practiceMode)
   }
 
   function tapCard() {
@@ -46,6 +47,15 @@ export default function StudyMode2() {
         <h1 className="text-2xl font-bold text-gray-900 mb-2">フラッシュカード</h1>
         <p className="text-gray-500 mb-6">英語→IPA→日本語の順でタップして表示。覚えているか確認します。</p>
         <LabelFilter labels={labels} />
+        <label className="flex items-center gap-2 mb-4 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={practiceMode}
+            onChange={e => setPracticeMode(e.target.checked)}
+            className="w-4 h-4 accent-indigo-600"
+          />
+          <span className="text-sm text-gray-600">練習モード（全単語・履歴に記録しない）</span>
+        </label>
         <button
           onClick={handleStart}
           className="w-full py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors"

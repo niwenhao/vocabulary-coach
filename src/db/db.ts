@@ -268,6 +268,46 @@ export async function getDueWords(labels: string[], mode: 1 | 2): Promise<
   }))
 }
 
+export async function getAllWordsWithReviews(labels: string[], mode: 1 | 2): Promise<
+  Array<{ word: Word; review: ReviewRecord }>
+> {
+  let sql: string
+  let params: (string | number)[]
+
+  if (labels.length === 0) {
+    sql = `SELECT w.*, r.id as r_id, r.word_id, r.mode as r_mode, r.interval_days, r.repetitions, r.ease_factor, r.due_date, r.last_reviewed_at
+           FROM words w
+           JOIN review_records r ON r.word_id = w.id
+           WHERE r.mode = ?
+           ORDER BY w.english ASC`
+    params = [mode]
+  } else {
+    const placeholders = labels.map(() => '?').join(',')
+    sql = `SELECT DISTINCT w.*, r.id as r_id, r.word_id, r.mode as r_mode, r.interval_days, r.repetitions, r.ease_factor, r.due_date, r.last_reviewed_at
+           FROM words w
+           JOIN review_records r ON r.word_id = w.id
+           JOIN json_each(w.labels) je ON je.value IN (${placeholders})
+           WHERE r.mode = ?
+           ORDER BY w.english ASC`
+    params = [...labels, mode]
+  }
+
+  const res = await getDB().query(sql, params)
+  return (res.values ?? []).map((row) => ({
+    word: rowToWord(row),
+    review: {
+      id: row['r_id'] as number,
+      wordId: row['word_id'] as number,
+      mode: row['r_mode'] as 1 | 2,
+      interval: row['interval_days'] as number,
+      repetitions: row['repetitions'] as number,
+      easeFactor: row['ease_factor'] as number,
+      dueDate: row['due_date'] as number,
+      lastReviewedAt: row['last_reviewed_at'] as number,
+    },
+  }))
+}
+
 // ── StudyEvent queries ────────────────────────────────────────────────────────
 
 export async function insertStudyEvent(

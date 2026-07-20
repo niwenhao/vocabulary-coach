@@ -17,6 +17,7 @@ export default function StudyMode1() {
   const [phase, setPhase] = useState<Phase>('waiting')
   const [input, setInput] = useState('')
   const [isCorrect, setIsCorrect] = useState(false)
+  const [practiceMode, setPracticeMode] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -28,7 +29,7 @@ export default function StudyMode1() {
   }, [phase, currentWord])
 
   async function handleStart() {
-    await buildQueue(1)
+    await buildQueue(1, practiceMode)
     setPhase('answering')
     setInput('')
   }
@@ -49,7 +50,7 @@ export default function StudyMode1() {
 
   async function handleNext() {
     if (!currentWord) return
-    await recordOutcome(isCorrect ? 'correct' : 'incorrect', 1)
+    await recordOutcome(isCorrect ? 'correct' : 'incorrect', 1, practiceMode)
     setInput('')
     setPhase('answering')
   }
@@ -60,6 +61,15 @@ export default function StudyMode1() {
         <h1 className="text-2xl font-bold text-gray-900 mb-2">タイピング練習</h1>
         <p className="text-gray-500 mb-6">日本語の意味を見て、英語を入力します。</p>
         <LabelFilter labels={labels} />
+        <label className="flex items-center gap-2 mb-4 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={practiceMode}
+            onChange={e => setPracticeMode(e.target.checked)}
+            className="w-4 h-4 accent-indigo-600"
+          />
+          <span className="text-sm text-gray-600">練習モード（全単語・履歴に記録しない）</span>
+        </label>
         <button
           onClick={handleStart}
           className="w-full py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors"

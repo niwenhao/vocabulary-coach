@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useAppStore } from '../store/useAppStore'
-import { getDueWords, updateReview, insertStudyEvent } from '../db/db'
+import { getDueWords, getAllWordsWithReviews, updateReview, insertStudyEvent } from '../db/db'
 import { sm2, outcomeToQuality } from '../lib/sm2'
 import { StudyEvent, SessionWord } from '../types'
 
@@ -14,21 +14,33 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 export function useSession() {
-  const { activeLabels, sessionQueue, sessionIndex, setSession, advanceSession } = useAppStore()
+  const { activeLabels, sessionQueue, sessionIndex, setSession, advanceSession, requeueWord } = useAppStore()
 
   const currentWord: SessionWord | null = sessionQueue[sessionIndex] ?? null
   const isFinished = sessionIndex >= sessionQueue.length && sessionQueue.length > 0
 
-  const buildQueue = useCallback(async (mode: 1 | 2) => {
-    const due = await getDueWords(activeLabels, mode)
-    setSession(shuffle(due))
+  const buildQueue = useCallback(async (mode: 1 | 2, practice = false) => {
+    const words = practice
+      ? await getAllWordsWithReviews(activeLabels, mode)
+      : await getDueWords(activeLabels, mode)
+    setSession(shuffle(words))
   }, [activeLabels, setSession])
 
   const recordOutcome = useCallback(
-    async (outcome: StudyEvent['outcome'], mode: 1 | 2) => {
+    async (outcome: StudyEvent['outcome'], mode: 1 | 2, practice = false) => {
       if (!currentWord) return
 
       const quality = outcomeToQuality(outcome)
+
+      if (practice) {
+        if (quality < 3) {
+          requeueWord({ word: currentWord.word, review: currentWord.review })
+        } else {
+          advanceSession()
+        }
+        return
+      }
+
       const result = sm2({
         quality,
         repetitions: currentWord.review.repetitions,
@@ -36,18 +48,34 @@ export function useSession() {
         interval: currentWord.review.interval,
       })
 
+      const now = Date.now()
       await updateReview(currentWord.review.id, {
         interval: result.interval,
         repetitions: result.repetitions,
         easeFactor: result.easeFactor,
         dueDate: result.dueDate,
-        lastReviewedAt: Date.now(),
+        lastReviewedAt: now,
       })
 
       await insertStudyEvent(currentWord.word.id, mode, outcome)
-      advanceSession()
+
+      if (quality < 3) {
+        requeueWord({
+          word: currentWord.word,
+          review: {
+            ...currentWord.review,
+            interval: result.interval,
+            repetitions: result.repetitions,
+            easeFactor: result.easeFactor,
+            dueDate: result.dueDate,
+            lastReviewedAt: now,
+          },
+        })
+      } else {
+        advanceSession()
+      }
     },
-    [currentWord, advanceSession]
+    [currentWord, advanceSession, requeueWord]
   )
 
   return {

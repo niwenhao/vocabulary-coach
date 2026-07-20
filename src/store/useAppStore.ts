@@ -10,6 +10,7 @@ interface AppState {
   sessionIndex: number
   setSession: (queue: SessionWord[]) => void
   advanceSession: () => void
+  requeueWord: (word: SessionWord) => void
   resetSession: () => void
 }
 
@@ -28,5 +29,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   sessionIndex: 0,
   setSession: (queue) => set({ sessionQueue: queue, sessionIndex: 0 }),
   advanceSession: () => set((s) => ({ sessionIndex: s.sessionIndex + 1 })),
+  requeueWord: (word) => set((s) => ({
+    sessionQueue: [...s.sessionQueue, word],
+    sessionIndex: s.sessionIndex + 1,
+  })),
   resetSession: () => set({ sessionQueue: [], sessionIndex: 0 }),
 }))

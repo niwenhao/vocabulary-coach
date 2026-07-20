@@ -193,6 +193,20 @@ export async function updateReview(
   await saveDB()
 }
 
+export async function resetReviewsByWordIds(wordIds: number[]): Promise<void> {
+  if (wordIds.length === 0) return
+  const now = Date.now()
+  const placeholders = wordIds.map(() => '?').join(',')
+  await getDB().run(
+    `UPDATE review_records
+     SET interval_days = 0, repetitions = 0, ease_factor = 2.5,
+         due_date = ?, last_reviewed_at = ?
+     WHERE word_id IN (${placeholders})`,
+    [now, now, ...wordIds]
+  )
+  await saveDB()
+}
+
 export async function getDueWords(labels: string[]): Promise<
   Array<{ word: Word; review: ReviewRecord }>
 > {

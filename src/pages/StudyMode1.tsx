@@ -5,6 +5,7 @@ import { useAllLabels } from '../hooks/useWords'
 import { useAppStore } from '../store/useAppStore'
 import LabelFilter from '../components/LabelFilter'
 import ProgressBar from '../components/ProgressBar'
+import { getEffectiveTimeLimit } from '../lib/labelSettings'
 
 type Phase = 'waiting' | 'answering' | 'result'
 
@@ -12,16 +13,21 @@ export default function StudyMode1() {
   const navigate = useNavigate()
   const { labels } = useAllLabels()
   const { currentWord, isFinished, progress, buildQueue, recordOutcome } = useSession()
-  const { resetSession } = useAppStore()
+  const { resetSession, activeLabels } = useAppStore()
 
   const [phase, setPhase] = useState<Phase>('waiting')
   const [input, setInput] = useState('')
   const [isCorrect, setIsCorrect] = useState(false)
   const [practiceMode, setPracticeMode] = useState(false)
+  const [timeLimit, setTimeLimit] = useState(0)
+  const [timeLeft, setTimeLeft] = useState(0)
+  const [timedOut, setTimedOut] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     resetSession()
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -29,9 +35,26 @@ export default function StudyMode1() {
   }, [phase, currentWord])
 
   async function handleStart() {
+    const limit = getEffectiveTimeLimit(activeLabels)
+    setTimeLimit(limit)
+    setTimedOut(false)
     await buildQueue(1, practiceMode)
     setPhase('answering')
     setInput('')
+    if (limit > 0) {
+      if (timerRef.current) clearInterval(timerRef.current)
+      setTimeLeft(limit)
+      timerRef.current = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            clearInterval(timerRef.current!)
+            setTimedOut(true)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+    }
   }
 
   function normalise(s: string) {
@@ -80,6 +103,38 @@ export default function StudyMode1() {
     )
   }
 
+  function handleRetry() {
+    if (timerRef.current) clearInterval(timerRef.current)
+    setTimedOut(false)
+    setTimeLeft(0)
+    resetSession()
+    setPhase('waiting')
+  }
+
+  if (timedOut) {
+    return (
+      <div className="max-w-lg mx-auto text-center py-12">
+        <div className="text-6xl mb-4">⏰</div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">時間切れ</h2>
+        <p className="text-gray-500 mb-6">{progress.current} / {progress.total}件 完了</p>
+        <div className="flex gap-3 justify-center">
+          <button
+            onClick={handleRetry}
+            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            もう一度
+          </button>
+          <button
+            onClick={() => navigate('/')}
+            className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            単語リストへ
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   if (isFinished) {
     return (
       <div className="max-w-lg mx-auto text-center py-12">
@@ -88,7 +143,7 @@ export default function StudyMode1() {
         <p className="text-gray-500 mb-6">{progress.total}件の単語を学習しました</p>
         <div className="flex gap-3 justify-center">
           <button
-            onClick={() => { resetSession(); setPhase('waiting') }}
+            onClick={handleRetry}
             className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
           >
             もう一度
@@ -125,6 +180,7 @@ export default function StudyMode1() {
       <ProgressBar current={progress.current} total={progress.total} />
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center mb-4">
+        <p className="text-xs text-gray-400 mb-1">{progress.current + 1} / {progress.total}</p>
         <p className="text-xs text-gray-400 uppercase tracking-wider mb-2">日本語</p>
         <p className="text-2xl font-bold text-gray-900 leading-relaxed">
           {currentWord.word.japanese}
@@ -133,6 +189,11 @@ export default function StudyMode1() {
 
       {phase === 'answering' && (
         <div className="space-y-3">
+          {timeLimit > 0 && (
+            <div className={`text-center text-sm font-semibold ${timeLeft <= 3 ? 'text-red-500' : 'text-gray-500'}`}>
+              残り {timeLeft} 秒
+            </div>
+          )}
           <input
             ref={inputRef}
             type="text"

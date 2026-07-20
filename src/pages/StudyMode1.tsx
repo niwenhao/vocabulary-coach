@@ -49,6 +49,12 @@ export default function StudyMode1() {
     return () => { clearTimeout(id); if (!removed) {} }
   }, [phase, currentWord]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 全問完了時にタイマーを止めて残り時間を確定
+  useEffect(() => {
+    if (!isFinished) return
+    if (timerRef.current) clearInterval(timerRef.current)
+  }, [isFinished])
+
   // タイムアウト時に未回答の単語をすべて不正解として結果に追加
   useEffect(() => {
     if (!timedOut) return
@@ -61,6 +67,12 @@ export default function StudyMode1() {
       return [...prev, ...extra]
     })
   }, [timedOut]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function formatTime(secs: number) {
+    const m = Math.floor(secs / 60)
+    const s = secs % 60
+    return m > 0 ? `${m}分${String(s).padStart(2, '0')}秒` : `${s}秒`
+  }
 
   function startTimer(limit: number) {
     if (timerRef.current) clearInterval(timerRef.current)
@@ -171,6 +183,11 @@ export default function StudyMode1() {
           <p className="text-gray-500">
             {correctCount} 正解 / {incorrectCount} 不正解（全 {sessionResults.length} 問）
           </p>
+          {timeLimit > 0 && (
+            <p className="text-sm text-gray-400 mt-1">
+              経過 {formatTime(timeLimit - timeLeft)}　／　残り {formatTime(timeLeft)}
+            </p>
+          )}
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 divide-y mb-4 max-h-96 overflow-y-auto">
@@ -249,8 +266,8 @@ export default function StudyMode1() {
       {phase === 'answering' && (
         <div className="space-y-3">
           {timeLimit > 0 && (
-            <div className={`text-center text-sm font-semibold ${timeLeft <= 3 ? 'text-red-500' : 'text-gray-500'}`}>
-              残り {timeLeft} 秒
+            <div className={`text-center text-sm font-semibold ${timeLeft <= 10 ? 'text-red-500' : 'text-gray-500'}`}>
+              経過 {formatTime(timeLimit - timeLeft)}　／　残り {formatTime(timeLeft)}
             </div>
           )}
           <input

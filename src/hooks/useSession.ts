@@ -59,21 +59,7 @@ export function useSession() {
 
       await insertStudyEvent(currentWord.word.id, mode, outcome)
 
-      if (quality < 3) {
-        requeueWord({
-          word: currentWord.word,
-          review: {
-            ...currentWord.review,
-            interval: result.interval,
-            repetitions: result.repetitions,
-            easeFactor: result.easeFactor,
-            dueDate: result.dueDate,
-            lastReviewedAt: now,
-          },
-        })
-      } else {
-        advanceSession()
-      }
+      advanceSession()
     },
     [currentWord, advanceSession, requeueWord]
   )

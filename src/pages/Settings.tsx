@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { exportToCSV, exportToExcel } from '../lib/csv'
-import { clearAllData, downloadDB, getAllLabels } from '../db/db'
+import { clearAllData, downloadDB, uploadDB, getAllLabels } from '../db/db'
 import {
   getDefaultTimeLimit,
   setDefaultTimeLimit,
@@ -29,6 +29,16 @@ export default function Settings() {
     const secs = Math.max(0, parseInt(value, 10) || 0)
     setLabelTimeLimit(label, secs)
     setLabelLimitsState((prev) => ({ ...prev, [label]: secs }))
+  }
+
+  async function handleUploadDB() {
+    if (!confirm('現在のDBをアップロードしたファイルで上書きします。よろしいですか？')) return
+    try {
+      await uploadDB()
+    } catch (e) {
+      alert('アップロードに失敗しました')
+      console.error(e)
+    }
   }
 
   async function handleClear() {
@@ -102,6 +112,12 @@ export default function Settings() {
               className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm hover:bg-gray-800 transition-colors"
             >
               DBダウンロード (.db)
+            </button>
+            <button
+              onClick={handleUploadDB}
+              className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm hover:bg-gray-800 transition-colors"
+            >
+              DBアップロード (.db)
             </button>
           </div>
         </div>

@@ -387,3 +387,13 @@ export async function downloadDB(): Promise<void> {
     await sqlite.saveToLocalDisk('vocabdb')
   }
 }
+
+export async function uploadDB(): Promise<void> {
+  if (Capacitor.getPlatform() !== 'web') return
+  await sqlite.getFromLocalDiskToStore(true)
+  if (db) {
+    await db.close()
+    db = null
+  }
+  await initDB()
+}

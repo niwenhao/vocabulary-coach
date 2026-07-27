@@ -10,7 +10,7 @@ PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS words (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  english    TEXT NOT NULL UNIQUE,
+  english    TEXT NOT NULL,
   ipa        TEXT NOT NULL DEFAULT '',
   japanese   TEXT NOT NULL,
   labels     TEXT NOT NULL DEFAULT '[]',
@@ -45,7 +45,7 @@ CREATE INDEX IF NOT EXISTS idx_review_word ON review_records(word_id);
 CREATE INDEX IF NOT EXISTS idx_study_word  ON study_events(word_id);
 `
 
-const DB_VERSION = 2
+const DB_VERSION = 3
 
 const UPGRADES = [
   {
@@ -54,6 +54,23 @@ const UPGRADES = [
       `ALTER TABLE review_records ADD COLUMN mode INTEGER NOT NULL DEFAULT 1;`,
       `INSERT INTO review_records (word_id, mode, interval_days, repetitions, ease_factor, due_date, last_reviewed_at)
        SELECT word_id, 2, 0, 0, 2.5, due_date, last_reviewed_at FROM review_records WHERE mode = 1;`,
+    ],
+  },
+  {
+    toVersion: 3,
+    statements: [
+      `CREATE TABLE words_new (
+         id         INTEGER PRIMARY KEY AUTOINCREMENT,
+         english    TEXT NOT NULL,
+         ipa        TEXT NOT NULL DEFAULT '',
+         japanese   TEXT NOT NULL,
+         labels     TEXT NOT NULL DEFAULT '[]',
+         created_at INTEGER NOT NULL,
+         updated_at INTEGER NOT NULL
+       );`,
+      `INSERT INTO words_new SELECT * FROM words;`,
+      `DROP TABLE words;`,
+      `ALTER TABLE words_new RENAME TO words;`,
     ],
   },
 ]
@@ -342,8 +359,8 @@ export async function upsertWord(
   data: Omit<Word, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<{ action: 'inserted' | 'updated'; id: number }> {
   const existing = await getDB().query(
-    'SELECT id FROM words WHERE english = ? LIMIT 1',
-    [data.english]
+    'SELECT id FROM words WHERE english = ? AND japanese = ? LIMIT 1',
+    [data.english, data.japanese]
   )
   const rows = existing.values ?? []
 
